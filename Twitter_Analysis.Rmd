@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-Loading the Recquired libraries and reading the datast
+## Loading the Recquired libraries and reading the datast
 ```{r}
 library(tm)
 library(dplyr)
@@ -151,4 +151,70 @@ for(bigram in bigrams){
 }
 bigrams_interested
 ```
+similar words
+```{r}
+words_similar = function(input_word){
+  word_list = c()
+  words_cosine = c()
+  for(curr_word in colnames(df_dtm)){
+    if(curr_word!=input_word){
+    curr_cosine = cosine(df_dtm[,input_word],df_dtm[,curr_word])
+    word_list = c(word_list,curr_word)
+    words_cosine = c(words_cosine,curr_cosine)
+  }
+  }
+  df_words = data.frame(words = word_list,cosine = words_cosine)
+ result <- df_words %>% arrange(-cosine) %>% head(5)
+  return (result$words)
+}
+words_similar('touch')
+```
+```{r}
+library(lsa)
+tdm <-  TermDocumentMatrix(corpus_clean)
+df_tdm <- as.data.frame(as.matrix(tdm))
+
+documents_similar <- function(doc_number){
+  docs_num <- c()
+  docs_cos <- c()
+  for (doc in colnames(df_dtm)) {
+  if(doc != doc_number){
+    curr_cos <- cosine(df_dtm[,doc_number],df_dtm[,doc])
+  docs_num <- c(docs_num,doc)
+  docs_cos <- c(docs_cos,curr_cos)
+  }
+  }
+   result <- data.frame(doc_num = docs_num, cosine = docs_cos)
+   result <- result %>% arrange(-cosine) %>% head(5)
+   return(result$doc_num)
+}
+documents_similar(10)
+```
+## Document Clustering using K means
+```{r}
+model=kmeans(df_dtm,5)
+barplot(table(model$cluster))
+```
+
+```{r}
+bow=sort(colSums(df_dtm),decreasing = T)
+top_words=head(bow,20)
+names(top_words)
+```
+
+```{r}
+df_dtm_top=df_dtm[,top_words]
+model=kmeans(df_dtm_top,5)
+barplot(table(model$cluster))
+```
+## Words Clustering
+```{r}
+model = kmeans(df_tdm,5)
+result = data.frame(words=rownames(df_tdm),cluster = model$cluster)
+View(result%>%filter(cluster == 1))
+barplot(table(model$cluster))
+write.csv(result,'words_cluster.csv',row.names = F)
+
+```
+
 

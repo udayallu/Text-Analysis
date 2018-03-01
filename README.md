@@ -1,4 +1,4 @@
-# Twitter-Analysis
+# Text-Analysis
 Analyzing the twitter data 
 
 ### Stpes for Text Analysis:

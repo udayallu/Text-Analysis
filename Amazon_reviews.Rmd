@@ -1,0 +1,223 @@
+---
+title: "Amazon_Reviews"
+author: "Uday Allu"
+date: "28 February 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Loading the Recquired libraries and reading the datast
+```{r}
+library(tm)
+library(dplyr)
+library(ggplot2)
+Sys.setenv(JAVA_HOME='C:\\Program Files\\Java\\jre1.8.0_161')
+
+# choose the file 
+reviews=read.csv("E:/DataScience/Text Analytics/amazon_reviews_11.csv")
+# Dimensions of the Dataset
+dim(reviews)
+```
+Making each review as the document 
+```{r}
+docs=VCorpus(VectorSource((reviews$reviewText)))
+docs
+```
+## Transformations
+```{r}
+corpus_clean=tm_map(docs,content_transformer(tolower))
+# removing the stop words
+corpus_clean=tm_map(corpus_clean,removeWords,stopwords())
+## cusotm stopwords
+custom_stop_words=c('amazon','got')
+corpus_clean=tm_map(corpus_clean,removeWords,custom_stop_words)
+inspect(corpus_clean[[1]])
+## Apply regular expression
+# Anything other than a-z will me removed and removing spaces
+apply_regex=function(x)gsub('[^a-z ]', '',x)
+corpus_clean=tm_map(corpus_clean, content_transformer(apply_regex))
+# stemming can alos be used to romeve words like "clearly" to "clear"
+# corpus_clean=tm_map(docs,stemDocument)
+#inspect(corpus_clean[[2]])
+#corpus_clean[[1]]
+inspect(corpus_clean[[1]])
+```
+## Document Term Matrix
+Document wise Frequency of the words 
+```{r}
+dtm=DocumentTermMatrix(corpus_clean)
+dtm
+```
+```{r}
+df_dtm=as.data.frame(as.matrix(dtm))
+View(dim(df_dtm))
+# view(dim(df_dtm[,1;10]))
+```
+Counting the number of Zeros and Non Zeros
+```{r}
+#counting  noof zero in a df
+x = lapply(df_dtm,function(x){length(which(x==0))})
+x = as.data.frame(x)
+x = sum(x)
+#counting noof non zeros
+y = lapply(df_dtm,function(x){length(which(x!=0))})
+y = as.data.frame(y)
+y = sum(y)
+x
+y
+```
+
+Bag of words
+```{r}
+bow=as.data.frame(sort(colSums(df_dtm),decreasing = T))
+bow$words=rownames(bow)
+names(bow)=c('Freq','words')
+```
+## wordcloud
+```{r}
+library(wordcloud)
+bow_top=head(bow,50)
+wordcloud(bow_top$words,bow_top$Freq,colors=bow_top$Freq)
+```
+
+## Distribution of the Document lenght
+```{r}
+docs_length=as.data.frame(rowSums(df_dtm))
+names(docs_length)=c('Freq')
+docs_length$doc_id=rownames(docs_length)
+View(docs_length)
+```
+## Box plot of the words 
+```{r}
+boxplot(docs_length$Freq)
+```
+## Top 5 Docs with more words in it
+```{r}
+docs_length %>% arrange(-Freq) %>% head(5)
+```
+## Inspecting the document 
+```{r}
+inspect(docs[[274]])
+```
+Frequecy of the Bad Words
+```{r}
+colSums(df_dtm %>% select(worst,poor,bad))
+```
+Frequecy of the Good Words
+```{r}
+colSums(df_dtm %>% select(bestwishes))
+```
+```{r}
+library(RWeka)
+```
+
+```{r}
+BigramTokenizer<-function(x) NGramTokenizer(x,Weka_control(min=2,max=2))
+dtm_bigram=DocumentTermMatrix(corpus_clean, control = list(tokenize=BigramTokenizer))
+df_btm_bigram=as.data.frame(as.matrix(dtm_bigram))
+View(df_btm_bigram[,1:10])
+```
+
+```{r}
+bow_bigram = as.data.frame( sort(colSums(df_btm_bigram),decreasing = T))
+bow_bigram$words = rownames(bow_bigram)
+names(bow_bigram) = c("freq","words")
+#View(bow_bigram)
+bow_bigram = head(bow_bigram,100)
+wordcloud(bow_bigram$words,bow_bigram$freq)
+```
+Bigram for the Bad Words
+```{r}
+word2look=c('worst','poor','bad','waste','normal')
+bigrams=colnames(df_btm_bigram)
+bigrams_interested=c()
+for(bigram in bigrams){
+ words_bigram=unlist(strsplit(bigram,' '))
+ if(length(intersect(word2look,words_bigram))>0)
+ {
+   print(bigram)
+ }
+}
+```
+Bigram for the Good Words
+```{r}
+good_words=c('awesome','good','excellent','decent')
+for(bigram in bigrams){
+ words_bigram=unlist(strsplit(bigram,' '))
+ if(length(intersect(good_words,words_bigram))>0)
+ {
+   bigrams_interested=c(bigrams_interested,bigram)
+ }
+}
+bigrams_interested
+```
+similar words
+```{r}
+library(lsa)
+words_similar = function(input_word){
+  word_list = c()
+  words_cosine = c()
+  for(curr_word in colnames(df_dtm)){
+    if(curr_word!=input_word){
+    curr_cosine = cosine(df_dtm[,input_word],df_dtm[,curr_word])
+    word_list = c(word_list,curr_word)
+    words_cosine = c(words_cosine,curr_cosine)
+  }
+  }
+  df_words = data.frame(words = word_list,cosine = words_cosine)
+ result <- df_words %>% arrange(-cosine) %>% head(5)
+  return (result$words)
+}
+words_similar('touch')
+```
+```{r}
+
+tdm <-  TermDocumentMatrix(corpus_clean)
+df_tdm <- as.data.frame(as.matrix(tdm))
+
+documents_similar <- function(doc_number){
+  docs_num <- c()
+  docs_cos <- c()
+  for (doc in colnames(df_dtm)) {
+  if(doc != doc_number){
+    curr_cos <- cosine(df_dtm[,doc_number],df_dtm[,doc])
+  docs_num <- c(docs_num,doc)
+  docs_cos <- c(docs_cos,curr_cos)
+  }
+  }
+   result <- data.frame(doc_num = docs_num, cosine = docs_cos)
+   result <- result %>% arrange(-cosine) %>% head(5)
+   return(result$doc_num)
+}
+documents_similar(10)
+```
+## Document Clustering using K means
+```{r}
+model=kmeans(df_dtm,5)
+barplot(table(model$cluster))
+```
+
+```{r}
+bow=sort(colSums(df_dtm),decreasing = T)
+top_words=head(bow,20)
+names(top_words)
+```
+
+```{r}
+df_dtm_top=df_dtm[,top_words]
+model=kmeans(df_dtm_top,5)
+barplot(table(model$cluster))
+```
+## Words Clustering
+```{r}
+model = kmeans(df_tdm,5)
+result = data.frame(words=rownames(df_tdm),cluster = model$cluster)
+View(result%>%filter(cluster == 1))
+barplot(table(model$cluster))
+write.csv(result,'words_cluster.csv',row.names = F)
+
+```
+
+
